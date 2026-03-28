@@ -235,8 +235,6 @@ with st.sidebar:
     st.markdown("### 📋 Rapor Bilgileri")
     meta_loc  = st.text_input("Tunel No",    value="")
     meta_by   = st.text_input("Computed by", value="")
-    meta_dev  = st.text_input("Developer",   value="Dr. Fatih Çelik")
-    meta_li   = st.text_input("LinkedIn",    value="", placeholder="linkedin.com/in/...")
 
     st.divider()
 
@@ -275,8 +273,7 @@ if compute_btn:
                 "chart_data":   build_chart_data(df_backup),
                 "dia_design":   dia_design,
                 "excel_bytes":  excel_buf.getvalue(),
-                "metadata":     {"location": meta_loc, "computed_by": meta_by,
-                                 "developer": meta_dev, "linkedin": meta_li},
+                "metadata":     {"location": meta_loc, "computed_by": meta_by},
             })
 
         except Exception as exc:
@@ -287,8 +284,56 @@ if compute_btn:
 # MAIN AREA — RAPOR + ANALİZ
 # ═══════════════════════════════════════════════════════════════════════════════
 if "df_result" not in st.session_state:
-    st.markdown("## ⭕ Wriggle Survey")
-    st.info("**Sol panelden** veri yükleyin ve **Hesapla** butonuna basın.")
+    col_main, col_dev = st.columns([3, 1], gap="large")
+
+    with col_main:
+        st.markdown("## ⭕ Wriggle Survey")
+        st.markdown("**Best-Fit Circle 3D — Kasa Method**")
+        st.divider()
+        st.info("**Sol panelden** veri yükleyin ve **Hesapla** butonuna basın.")
+        st.markdown("""
+**Kullanım adımları:**
+1. 🏗️ Tünel çapı ve kazı yönünü girin
+2. 📐 Ring başına nokta sayısı ve prizma offsetini ayarlayın
+3. 📍 Wriggle ölçüm verisini (Excel) yükleyin
+4. 🗺️ Güzergah verisini (LandXML veya Excel) yükleyin
+5. 📋 Rapor bilgilerini doldurun
+6. ▶ **Hesapla** butonuna basın
+        """)
+
+    with col_dev:
+        st.markdown("""
+<div style="
+    background: linear-gradient(160deg, #1e3a5f 0%, #2d6a9f 100%);
+    border-radius: 12px;
+    padding: 28px 20px;
+    text-align: center;
+    color: white;
+    font-family: sans-serif;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    margin-top: 10px;
+">
+  <div style="font-size:42px; margin-bottom:10px;">👷</div>
+  <div style="font-size:11px; letter-spacing:2px; text-transform:uppercase;
+              opacity:0.75; margin-bottom:6px;">Developer</div>
+  <div style="font-size:18px; font-weight:700; margin-bottom:20px;
+              border-bottom:1px solid rgba(255,255,255,0.2); padding-bottom:16px;">
+    Dr. Fatih Çelik
+  </div>
+  <a href="https://www.linkedin.com/in/fatihcelik/" target="_blank" style="
+      display:inline-block;
+      background:#0077b5;
+      color:white;
+      text-decoration:none;
+      border-radius:6px;
+      padding:8px 18px;
+      font-size:13px;
+      font-weight:600;
+      margin-top:4px;
+  ">🔗 LinkedIn</a>
+</div>
+        """, unsafe_allow_html=True)
+
     st.stop()
 
 df_result  = st.session_state["df_result"]
