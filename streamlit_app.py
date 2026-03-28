@@ -45,6 +45,35 @@ def _safe(v):
         return None
 
 
+def normalise_dta_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Rename DTA Excel columns to the standard names expected by wriggle_core.
+    Handles case-insensitive and unit-suffix variations.
+    """
+    rename_map = {}
+    for col in df.columns:
+        c = col.strip().lower().replace(" ", "").replace("_", "")
+        if c in ("chainage", "chainage(m)", "ch", "station", "station(m)"):
+            rename_map[col] = "CHAINAGE"
+        elif c in ("easting", "easting(m)", "easting(m.)", "e", "e(m)"):
+            rename_map[col] = "EASTING (M.)"
+        elif c in ("northing", "northing(m)", "northing(m.)", "n", "n(m)"):
+            rename_map[col] = "NORTHING (M.)"
+        elif c in ("elevation", "elevation(m)", "elevation(m.)", "z", "z(m)", "elev", "elev(m)"):
+            rename_map[col] = "ELEVATION (M.)"
+        elif c in ("pointno", "pointno.", "pointnumber", "no", "no.", "id"):
+            rename_map[col] = "POINT NO."
+        # Azimuth column: keep but not required by wriggle_core
+    df = df.rename(columns=rename_map)
+    # Add POINT NO. if missing
+    if "POINT NO." not in df.columns:
+        df.insert(0, "POINT NO.", range(1, len(df) + 1))
+    # Add ELEVATION if missing
+    if "ELEVATION (M.)" not in df.columns:
+        df["ELEVATION (M.)"] = 0.0
+    return df
+
+
 def prepare_wrs_data(df: pd.DataFrame, points_per_ring: int, prism_offset: float) -> pd.DataFrame:
     required = {"EASTING (M.)", "NORTHING (M.)", "ELEVATION (M.)"}
     missing  = required - set(df.columns)
@@ -183,7 +212,7 @@ with st.sidebar:
                 if dta_is_xml:
                     _df_dta_p = parse_landxml_to_dta(dta_bytes, float(sample_interval), swap_en=swap_en)
                 else:
-                    _df_dta_p = pd.read_excel(io.BytesIO(dta_bytes), sheet_name=0)
+                    _df_dta_p = normalise_dta_columns(pd.read_excel(io.BytesIO(dta_bytes), sheet_name=0))
                 st.caption("**DTA / Güzergah (E/N / Chainage aralığı):**")
                 st.write(f"E: `{_df_dta_p['EASTING (M.)'].min():.3f}` → `{_df_dta_p['EASTING (M.)'].max():.3f}`")
                 st.write(f"N: `{_df_dta_p['NORTHING (M.)'].min():.3f}` → `{_df_dta_p['NORTHING (M.)'].max():.3f}`")
@@ -230,7 +259,7 @@ if compute_btn:
             if dta_is_xml:
                 df_dta = parse_landxml_to_dta(dta_bytes, float(sample_interval), swap_en=swap_en)
             else:
-                df_dta = pd.read_excel(io.BytesIO(dta_bytes), sheet_name=0)
+                df_dta = normalise_dta_columns(pd.read_excel(io.BytesIO(dta_bytes), sheet_name=0))
 
             df_result, df_backup = compute_wriggle_survey(df_wrs, df_dta, dia_design, direction)
 
