@@ -120,7 +120,7 @@ def _draw_title_bar(ax, ring_no, chainage, metadata):
         _txt(ax, col3_lx + col3_w + 0.01, ry + 0.08, val2, fontsize=7.5)
 
     # Horizontal separator under title
-    ax.axhline(0.0, color='black', lw=0.8, transform=ax.transAxes)
+    ax.plot([0, 1], [0.0, 0.0], color='black', lw=0.8, transform=ax.transAxes, clip_on=False)
 
 
 def _draw_cross_section(ax, ring_no, points, avg_r, des_r, hor_dev, ver_dev):
