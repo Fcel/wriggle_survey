@@ -1,12 +1,10 @@
 """
-Wriggle Survey — Streamlit Web Application
-Best-Fit Circle 3D (Kasa Method) | Tunnel Survey Analysis
+Wriggle Survey — Streamlit Application
+Sol panel: veri girişi / Orta alan: rapor önizlemesi
 """
 
-import sys
-import os
-import io
-import math
+import sys, os, io, math
+from datetime import date
 
 import numpy as np
 import pandas as pd
@@ -14,13 +12,11 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import streamlit as st
 
-# ── Backend path ──────────────────────────────────────────────────────────────
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "backend"))
 from wriggle_core import compute_wriggle_survey
 from landxml_parser import parse_landxml_to_dta, list_alignments
+from report_generator import generate_ring_figure, generate_ring_report
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# Page config
 # ═══════════════════════════════════════════════════════════════════════════════
 st.set_page_config(
     page_title="Wriggle Survey",
@@ -28,169 +24,19 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
-
 st.markdown("""
 <style>
-[data-testid="stSidebar"] { min-width: 280px; }
-div[data-testid="metric-container"] { background:#1e293b; border-radius:10px; padding:12px; }
-.stTabs [data-baseweb="tab-list"] { gap: 8px; }
-.stTabs [data-baseweb="tab"] { border-radius: 8px 8px 0 0; }
+[data-testid="stSidebar"] { min-width: 300px; max-width: 340px; }
+[data-testid="stSidebar"] .stButton > button { width: 100%; }
+section[data-testid="stSidebarContent"] { padding-top: 1rem; }
 </style>
 """, unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Sidebar — Configuration
-# ═══════════════════════════════════════════════════════════════════════════════
-with st.sidebar:
-    st.markdown("## ⭕ Wriggle Survey")
-    st.caption("Best-Fit Circle 3D — Kasa Method")
-    st.divider()
-
-    st.markdown("### ⚙️ Hesaplama Ayarları")
-    dia_design = st.number_input(
-        "Tasarım Çapı (m)", value=3.396, min_value=0.1,
-        step=0.001, format="%.3f",
-        help="Tünel tasarım çapı (metre)"
-    )
-    direction = st.selectbox(
-        "Kazı Yönü",
-        ["DIRECT", "REVERSE"],
-        help="DIRECT: ileri yön, REVERSE: geri yön (sapma işareti)"
-    )
-
-    st.divider()
-    st.markdown("### 📐 Ölçüm Ayarları")
-    points_per_ring = st.number_input(
-        "Ring başına nokta sayısı", value=8, min_value=3, max_value=16, step=1,
-        help="Her ringte kaç prizma noktası ölçüldüğü (örn. 8, 10, 12, 16)"
-    )
-    prism_offset = st.number_input(
-        "Prizma Offset (m)", value=0.038, min_value=0.0,
-        step=0.001, format="%.3f",
-        help="Prizma merkezinden tünel yüzeyine mesafe"
-    )
-
-    st.divider()
-    st.markdown("### 🗺️ LandXML Ayarları")
-    sample_interval = st.number_input(
-        "Örnekleme Aralığı (m)", value=1.0, min_value=0.1,
-        step=0.5, format="%.1f",
-        help="LandXML güzergahından nokta örnekleme adımı"
-    )
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Header
-# ═══════════════════════════════════════════════════════════════════════════════
-st.markdown("# ⭕ Wriggle Survey")
-st.caption("Tünel kesit analizi — Best-Fit Circle 3D (Kasa Method)")
-st.divider()
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Input section
-# ═══════════════════════════════════════════════════════════════════════════════
-st.markdown("### 📂 Veri Girişi")
-
-st.info(
-    "**Wriggle verisi** için sadece 4 sütun yeterli:\n"
-    "`POINT NO.` · `EASTING (M.)` · `NORTHING (M.)` · `ELEVATION (M.)`\n\n"
-    "Ring gruplaması, offset ve NUM. POINTS otomatik hesaplanır.",
-    icon="💡",
-)
-
-col_wrs, col_dta = st.columns(2)
-wrs_bytes = None
-dta_bytes = None
-dta_is_xml = False
-
-with col_wrs:
-    st.markdown("**📍 Wriggle Ölçüm Verisi**")
-    wrs_file = st.file_uploader(
-        "Excel yükle (.xlsx) — ilk sayfa okunur",
-        type=["xlsx", "xls"],
-        key="wrs",
-        help="Sütunlar: POINT NO. | EASTING (M.) | NORTHING (M.) | ELEVATION (M.)",
-    )
-    if wrs_file:
-        wrs_bytes = wrs_file.getvalue()
-        st.caption(f"✅ {wrs_file.name}  ({wrs_file.size/1024:.1f} KB)")
-
-with col_dta:
-    st.markdown("**🗺️ Tünel Güzergahı (DTA)**")
-    dta_fmt = st.radio(
-        "Format", ["Excel (.xlsx)", "LandXML (.xml)"],
-        horizontal=True, key="dta_fmt",
-    )
-    dta_is_xml = dta_fmt == "LandXML (.xml)"
-
-    if dta_is_xml:
-        dta_file = st.file_uploader(
-            "LandXML dosyası yükle",
-            type=["xml", "landxml"],
-            key="dta_xml",
-            help="AutoCAD Civil 3D, Trimble, Leica vb. yazılımların çıktısı",
-        )
-    else:
-        dta_file = st.file_uploader(
-            "DTA Excel yükle (.xlsx)",
-            type=["xlsx", "xls"],
-            key="dta_xl",
-            help="Sütunlar: POINT NO. | CHAINAGE | EASTING (M.) | NORTHING (M.) | ELEVATION (M.)",
-        )
-    if dta_file:
-        dta_bytes = dta_file.getvalue()
-        st.caption(f"✅ {dta_file.name}  ({dta_file.size/1024:.1f} KB)")
-
-# ── LandXML alignment preview ─────────────────────────────────────────────────
-if dta_is_xml and dta_bytes:
-    alignment_names = list_alignments(dta_bytes)
-    if alignment_names:
-        st.info(
-            f"**{len(alignment_names)} güzergah bulundu** — "
-            f"ilk güzergah kullanılacak: `{alignment_names[0]}`"
-            + (f" (diğerleri: {', '.join(alignment_names[1:])})" if len(alignment_names) > 1 else "")
-        )
-
-st.divider()
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Helper functions (must be defined before button handler)
+# HELPER FUNCTIONS
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def prepare_wrs_data(df: pd.DataFrame, points_per_ring: int, prism_offset: float) -> pd.DataFrame:
-    """
-    Basit formattan (POINT NO., E, N, Z) tam wriggle formatına dönüştür.
-    Satırları points_per_ring adımlarıyla gruplara böler.
-    """
-    required = {"EASTING (M.)", "NORTHING (M.)", "ELEVATION (M.)"}
-    missing = required - set(df.columns)
-    if missing:
-        raise ValueError(f"Eksik sütunlar: {missing}")
-
-    df = df.reset_index(drop=True)
-    total = len(df)
-    rows = []
-
-    for i, src in df.iterrows():
-        pos = i % points_per_ring          # 0-indexed position within ring
-        ring_no = i // points_per_ring     # ring index
-        is_first = pos == 0
-        pts_this_ring = min(points_per_ring, total - ring_no * points_per_ring)
-
-        rows.append({
-            "RING NO.":       ring_no,
-            "POINT NO.":      pos + 1,
-            "EASTING (M.)":   src["EASTING (M.)"],
-            "NORTHING (M.)":  src["NORTHING (M.)"],
-            "ELEVATION (M.)": src["ELEVATION (M.)"],
-            "OFFSET (M.)":    prism_offset,
-            "NUM. POINTS":    pts_this_ring if is_first else None,
-        })
-
-    return pd.DataFrame(rows)
 def _safe(v):
     try:
         f = float(v)
@@ -199,30 +45,51 @@ def _safe(v):
         return None
 
 
-def _build_chart_data(df_backup: pd.DataFrame) -> list[dict]:
+def prepare_wrs_data(df: pd.DataFrame, points_per_ring: int, prism_offset: float) -> pd.DataFrame:
+    required = {"EASTING (M.)", "NORTHING (M.)", "ELEVATION (M.)"}
+    missing  = required - set(df.columns)
+    if missing:
+        raise ValueError(f"Eksik sütunlar: {missing}")
+    df = df.reset_index(drop=True)
+    total = len(df)
+    rows = []
+    for i, src in df.iterrows():
+        pos      = i % points_per_ring
+        ring_no  = i // points_per_ring
+        is_first = pos == 0
+        pts      = min(points_per_ring, total - ring_no * points_per_ring)
+        rows.append({
+            "RING NO.":       ring_no,
+            "POINT NO.":      pos + 1,
+            "EASTING (M.)":   src["EASTING (M.)"],
+            "NORTHING (M.)":  src["NORTHING (M.)"],
+            "ELEVATION (M.)": src["ELEVATION (M.)"],
+            "OFFSET (M.)":    prism_offset,
+            "NUM. POINTS":    pts if is_first else None,
+        })
+    return pd.DataFrame(rows)
+
+
+def build_chart_data(df_backup: pd.DataFrame) -> list[dict]:
     rows = []
     for _, row in df_backup.iterrows():
         num_pnt = int(row.get("NUM.PNT", 0) or 0)
         xc = _safe(row.get("X_C"))
-        yc_raw = _safe(row.get("Y_C"))
-        yc = (yc_raw - 100) if yc_raw is not None else None
-
+        yc = (_safe(row.get("Y_C")) or 0) - 100
         points = []
         for t in range(1, num_pnt + 1):
             xv = _safe(row.get(f"X_P{t}"))
-            yv_raw = _safe(row.get(f"Y_P{t}"))
-            yv = (yv_raw - 100) if yv_raw is not None else None
-            rdbc = _safe(row.get(f"RDBC_P{t}"))
-            r    = _safe(row.get(f"R_P{t}"))
-            if xv is not None and yv is not None and xc is not None and yc is not None:
+            yv_r = _safe(row.get(f"Y_P{t}"))
+            yv = (yv_r - 100) if yv_r is not None else None
+            if xv is not None and yv is not None and xc is not None:
                 points.append({
                     "label": f"P{t}",
                     "x": round(xv - xc, 6),
                     "y": round(yv - yc, 6),
-                    "rdbc": rdbc,
-                    "r": r,
+                    "rdbc": _safe(row.get(f"RDBC_P{t}")),
+                    "r":    _safe(row.get(f"R_P{t}")),
+                    "ang":  _safe(row.get(f"ANG_P{t}")),
                 })
-
         rows.append({
             "ring_no":       str(row.get("RING NO.", "")),
             "chainage":      _safe(row.get("CH")),
@@ -235,54 +102,112 @@ def _build_chart_data(df_backup: pd.DataFrame) -> list[dict]:
     return rows
 
 
-# ── Compute button ────────────────────────────────────────────────────────────
-can_compute = wrs_bytes is not None and dta_bytes is not None
-compute_btn = st.button("▶ Hesapla", type="primary", disabled=not can_compute, use_container_width=False)
+# ═══════════════════════════════════════════════════════════════════════════════
+# LEFT SIDEBAR — TÜM GİRİŞLER
+# ═══════════════════════════════════════════════════════════════════════════════
+with st.sidebar:
+    st.markdown("## ⭕ Wriggle Survey")
+    st.caption("Best-Fit Circle 3D — Kasa Method")
+    st.divider()
 
+    # ── 1. Tünel Bilgileri ────────────────────────────────────────────────────
+    st.markdown("### 🏗️ Tünel Bilgileri")
+    dia_design = st.number_input(
+        "Tasarım Çapı (m)", value=3.396, min_value=0.1, step=0.001, format="%.3f")
+    direction = st.selectbox("Kazı Yönü", ["DIRECT", "REVERSE"])
+
+    st.divider()
+
+    # ── 2. Ölçüm Ayarları ────────────────────────────────────────────────────
+    st.markdown("### 📐 Ölçüm Ayarları")
+    points_per_ring = st.number_input(
+        "Ring başına nokta sayısı", value=8, min_value=3, max_value=16, step=1)
+    prism_offset = st.number_input(
+        "Prizma Offset (m)", value=0.038, min_value=0.0, step=0.001, format="%.3f")
+
+    st.divider()
+
+    # ── 3. Wriggle Ölçüm Verisi ──────────────────────────────────────────────
+    st.markdown("### 📍 Wriggle Ölçüm Verisi")
+    st.caption("Sütunlar: POINT NO. | EASTING | NORTHING | ELEVATION")
+    wrs_file = st.file_uploader(
+        "Excel yükle (.xlsx)", type=["xlsx","xls"], key="wrs",
+        help="İlk sayfa okunur. 4 sütun yeterli — ring gruplaması otomatik.")
+    wrs_bytes = wrs_file.getvalue() if wrs_file else None
+
+    st.divider()
+
+    # ── 4. Güzergah (DTA) ────────────────────────────────────────────────────
+    st.markdown("### 🗺️ Tünel Güzergahı (DTA)")
+    dta_fmt = st.radio("Format", ["LandXML (.xml)", "Excel (.xlsx)"], horizontal=True)
+    dta_is_xml = dta_fmt == "LandXML (.xml)"
+
+    if dta_is_xml:
+        sample_interval = st.number_input(
+            "Örnekleme Aralığı (m)", value=1.0, min_value=0.1, step=0.5, format="%.1f")
+        dta_file = st.file_uploader(
+            "LandXML yükle", type=["xml","landxml"], key="dta_xml",
+            help="AutoCAD Civil 3D, Trimble, Leica vb.")
+    else:
+        sample_interval = 1.0
+        dta_file = st.file_uploader(
+            "DTA Excel yükle (.xlsx)", type=["xlsx","xls"], key="dta_xl",
+            help="Sütunlar: POINT NO. | CHAINAGE | EASTING | NORTHING | ELEVATION")
+
+    dta_bytes = dta_file.getvalue() if dta_file else None
+
+    if dta_is_xml and dta_bytes:
+        names = list_alignments(dta_bytes)
+        if names:
+            st.info(f"Güzergah: **{names[0]}**" +
+                    (f" (+{len(names)-1} diğer)" if len(names) > 1 else ""))
+
+    st.divider()
+
+    # ── 5. Rapor Bilgileri ───────────────────────────────────────────────────
+    st.markdown("### 📋 Rapor Bilgileri")
+    meta_dept = st.text_input("Department",  value="Survey Section")
+    meta_loc  = st.text_input("Location",    value="")
+    meta_by   = st.text_input("Computed by", value="")
+
+    st.divider()
+
+    # ── 6. Hesapla butonu ─────────────────────────────────────────────────────
+    can_compute = wrs_bytes is not None and dta_bytes is not None
+    compute_btn = st.button("▶ Hesapla", type="primary", disabled=not can_compute)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# COMPUTE
+# ═══════════════════════════════════════════════════════════════════════════════
 if compute_btn:
     with st.spinner("Hesaplanıyor..."):
         try:
-            # ── Wriggle verisi oku (ilk sayfa, herhangi bir isim) ─────────────
             df_wrs_raw = pd.read_excel(io.BytesIO(wrs_bytes), sheet_name=0)
-
-            # Tam format mı (NUM. POINTS var) yoksa basit format mı?
             if "NUM. POINTS" in df_wrs_raw.columns:
-                df_wrs = df_wrs_raw   # eski tam format — doğrudan kullan
+                df_wrs = df_wrs_raw
             else:
                 df_wrs = prepare_wrs_data(df_wrs_raw, int(points_per_ring), float(prism_offset))
-                st.info(
-                    f"Basit format algılandı → "
-                    f"{len(df_wrs_raw)} nokta, "
-                    f"{len(df_wrs_raw) // int(points_per_ring)} ring "
-                    f"({int(points_per_ring)} nokta/ring, offset={prism_offset:.3f} m)"
-                )
 
-            # ── DTA verisi oku ────────────────────────────────────────────────
             if dta_is_xml:
-                df_dta = parse_landxml_to_dta(dta_bytes, sample_interval)
-                st.success(f"LandXML → {len(df_dta)} güzergah noktası okundu.")
+                df_dta = parse_landxml_to_dta(dta_bytes, float(sample_interval))
             else:
                 df_dta = pd.read_excel(io.BytesIO(dta_bytes), sheet_name=0)
 
-            # Compute
             df_result, df_backup = compute_wriggle_survey(df_wrs, df_dta, dia_design, direction)
 
-            # Build chart data
-            chart_data = _build_chart_data(df_backup)
-
-            # Generate download Excel
             excel_buf = io.BytesIO()
             with pd.ExcelWriter(excel_buf, engine="openpyxl") as writer:
-                df_result.to_excel(writer, sheet_name="WRIGGLE RESULT",  index=False)
-                df_backup.to_excel(writer, sheet_name="WRIGGLE BACKUP",  index=False)
+                df_result.to_excel(writer, sheet_name="WRIGGLE RESULT", index=False)
+                df_backup.to_excel(writer, sheet_name="WRIGGLE BACKUP", index=False)
 
-            # Persist in session state
             st.session_state.update({
-                "df_result":   df_result,
-                "df_backup":   df_backup,
-                "chart_data":  chart_data,
-                "dia_design":  dia_design,
-                "excel_bytes": excel_buf.getvalue(),
+                "df_result":    df_result,
+                "df_backup":    df_backup,
+                "chart_data":   build_chart_data(df_backup),
+                "dia_design":   dia_design,
+                "excel_bytes":  excel_buf.getvalue(),
+                "metadata":     {"department": meta_dept, "location": meta_loc, "computed_by": meta_by},
             })
 
         except Exception as exc:
@@ -290,254 +215,178 @@ if compute_btn:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Results section
+# MAIN AREA — RAPOR + ANALİZ
 # ═══════════════════════════════════════════════════════════════════════════════
 if "df_result" not in st.session_state:
+    st.markdown("## ⭕ Wriggle Survey")
+    st.info("**Sol panelden** veri yükleyin ve **Hesapla** butonuna basın.")
     st.stop()
 
 df_result  = st.session_state["df_result"]
 df_backup  = st.session_state["df_backup"]
 chart_data = st.session_state["chart_data"]
 design_dia = st.session_state["dia_design"]
+metadata   = st.session_state["metadata"]
 
-# ── Summary metrics ───────────────────────────────────────────────────────────
-n_rings = len(df_result)
-dh_vals = df_result["HOR.DEVIATION (M.)"].dropna().values
-dv_vals = df_result["VER.DEVIATION (M.)"].dropna().values
+# ── Üst bar: özet metrikler + download ───────────────────────────────────────
+n_rings  = len(df_result)
+dh_vals  = df_result["HOR.DEVIATION (M.)"].dropna().values
+dv_vals  = df_result["VER.DEVIATION (M.)"].dropna().values
 dia_vals = df_result["AVG.DIAMETER (M.)"].dropna().values
 
-st.markdown("### 📊 Sonuçlar")
-m1, m2, m3, m4, m5 = st.columns(5)
-m1.metric("Ring Sayısı",           f"{n_rings}")
-m2.metric("Maks. Yatay Sapma",     f"{np.max(np.abs(dh_vals)):.4f} m" if len(dh_vals) else "—")
-m3.metric("Maks. Dikey Sapma",     f"{np.max(np.abs(dv_vals)):.4f} m" if len(dv_vals) else "—")
-m4.metric("Ort. Çap",              f"{np.mean(dia_vals):.4f} m"       if len(dia_vals) else "—")
-m5.metric("Çap Farkı (ort−tasarım)",
-          f"{np.mean(dia_vals) - design_dia:+.4f} m"                  if len(dia_vals) else "—")
-
-# ── Download ──────────────────────────────────────────────────────────────────
-st.download_button(
-    label="⬇ Excel Olarak İndir",
-    data=st.session_state["excel_bytes"],
-    file_name="Export_Wriggle_Survey.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-)
+top_left, top_right = st.columns([3, 1])
+with top_left:
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Ring Sayısı",        f"{n_rings}")
+    c2.metric("Maks. Yatay Sapma",  f"{np.max(np.abs(dh_vals)):.4f} m"  if len(dh_vals)  else "—")
+    c3.metric("Maks. Dikey Sapma",  f"{np.max(np.abs(dv_vals)):.4f} m"  if len(dv_vals)  else "—")
+    c4.metric("Ort. Çap",           f"{np.mean(dia_vals):.4f} m"        if len(dia_vals) else "—")
+with top_right:
+    st.download_button(
+        "⬇ Excel İndir", data=st.session_state["excel_bytes"],
+        file_name="Export_Wriggle_Survey.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True,
+    )
 
 st.divider()
 
-# ── Tabs ──────────────────────────────────────────────────────────────────────
-tab_table, tab_dev, tab_dia, tab_cross = st.tabs([
+# ── Sekmeler ─────────────────────────────────────────────────────────────────
+tab_report, tab_table, tab_charts = st.tabs([
+    "📄 Wriggle Survey Report",
     "📋 Sonuç Tablosu",
-    "📉 Sapmalar",
-    "⭕ Çap Analizi",
-    "🔵 Kesit Görünümü",
+    "📊 Grafikler",
 ])
 
-PLOTLY_THEME = dict(
-    template="plotly_dark",
-    paper_bgcolor="rgba(0,0,0,0)",
-    plot_bgcolor="#0f172a",
-    font=dict(color="#94a3b8", size=12),
-    margin=dict(l=50, r=30, t=40, b=50),
-)
+# ─────────────────────────────────────────────────────────────────────────────
+# TAB 1 — RAPOR ÖNİZLEME
+# ─────────────────────────────────────────────────────────────────────────────
+with tab_report:
+    ring_labels = [
+        f"{d['ring_no']}  —  CH {d['chainage']:.3f} m" if d['chainage'] else d['ring_no']
+        for d in chart_data
+    ]
+    col_sel, col_dl = st.columns([3, 1])
+    with col_sel:
+        sel_idx = st.selectbox("Ring Seç", range(n_rings), format_func=lambda i: ring_labels[i])
+    with col_dl:
+        # PDF download for selected ring
+        pdf_bytes = generate_ring_report(
+            dict(df_backup.iloc[sel_idx]),
+            dict(df_result.iloc[sel_idx]),
+            metadata=metadata,
+            dpi=150,
+        )
+        st.download_button(
+            "⬇ PDF İndir (Bu Ring)",
+            data=pdf_bytes,
+            file_name=f"Wriggle_{df_result.iloc[sel_idx]['RING NO.']}.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+        )
 
+    # Rapor önizlemesi
+    with st.spinner("Rapor oluşturuluyor..."):
+        fig = generate_ring_figure(
+            dict(df_backup.iloc[sel_idx]),
+            dict(df_result.iloc[sel_idx]),
+            metadata=metadata,
+            dpi=110,
+        )
+    st.pyplot(fig, use_container_width=True)
+    import matplotlib.pyplot as plt
+    plt.close(fig)
 
-# ── Tab 1: Sonuç Tablosu ──────────────────────────────────────────────────────
+    # Tüm ringler için PDF
+    st.divider()
+    if st.button("📦 Tüm Ringler için PDF Oluştur", use_container_width=False):
+        import matplotlib.backends.backend_pdf as pdf_backend
+        all_pdf = io.BytesIO()
+        with pdf_backend.PdfPages(all_pdf) as pp:
+            for i in range(n_rings):
+                f = generate_ring_figure(
+                    dict(df_backup.iloc[i]),
+                    dict(df_result.iloc[i]),
+                    metadata=metadata, dpi=120,
+                )
+                pp.savefig(f, bbox_inches='tight')
+                plt.close(f)
+        st.download_button(
+            "⬇ Tüm Ringler PDF İndir",
+            data=all_pdf.getvalue(),
+            file_name="Wriggle_Survey_All_Rings.pdf",
+            mime="application/pdf",
+        )
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TAB 2 — SONUÇ TABLOSU
+# ─────────────────────────────────────────────────────────────────────────────
 with tab_table:
-    # Colour deviations
     def colour_dev(val):
-        if val is None or (isinstance(val, float) and math.isnan(val)):
+        try:
+            return "color: #4ade80" if float(val) >= 0 else "color: #f87171"
+        except Exception:
             return ""
-        return "color: #4ade80" if float(val) >= 0 else "color: #f87171"
 
     styled = (
         df_result.style
         .applymap(colour_dev, subset=["HOR.DEVIATION (M.)", "VER.DEVIATION (M.)"])
         .format({
-            "TUN.CL-EASTING (M.)":  "{:.3f}",
-            "TUN.CL-NORTHING (M.)": "{:.3f}",
-            "TUN.CL-ELEVATION (M.)":"{:.3f}",
-            "CHAINAGE (M.)":        "{:.3f}",
-            "HOR.DEVIATION (M.)":   "{:.4f}",
-            "VER.DEVIATION (M.)":   "{:.4f}",
-            "AVG.RADIUS (M.)":      "{:.4f}",
-            "AVG.DIAMETER (M.)":    "{:.4f}",
+            "TUN.CL-EASTING (M.)":   "{:.3f}",
+            "TUN.CL-NORTHING (M.)":  "{:.3f}",
+            "TUN.CL-ELEVATION (M.)": "{:.3f}",
+            "CHAINAGE (M.)":         "{:.3f}",
+            "HOR.DEVIATION (M.)":    "{:+.4f}",
+            "VER.DEVIATION (M.)":    "{:+.4f}",
+            "AVG.RADIUS (M.)":       "{:.4f}",
+            "AVG.DIAMETER (M.)":     "{:.4f}",
         }, na_rep="—")
     )
-    st.dataframe(styled, use_container_width=True, height=450)
+    st.dataframe(styled, use_container_width=True, height=500)
 
+# ─────────────────────────────────────────────────────────────────────────────
+# TAB 3 — GRAFİKLER
+# ─────────────────────────────────────────────────────────────────────────────
+with tab_charts:
+    THEME = dict(
+        template="plotly_dark",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="#0f172a",
+        font=dict(color="#94a3b8", size=11),
+        margin=dict(l=50, r=20, t=40, b=50),
+    )
 
-# ── Tab 2: Sapmalar ───────────────────────────────────────────────────────────
-with tab_dev:
     rings   = [d["ring_no"]  for d in chart_data]
     hor_dev = [d["hor_dev"]  for d in chart_data]
     ver_dev = [d["ver_dev"]  for d in chart_data]
+    diam    = [(d["avg_radius"] or 0) * 2 for d in chart_data]
 
-    fig_dev = make_subplots(
-        rows=1, cols=2,
+    # Deviation charts
+    fig_dev = make_subplots(rows=1, cols=2,
         subplot_titles=("Yatay Sapma (m)", "Dikey Sapma (m)"),
-        horizontal_spacing=0.1,
-    )
-
-    c_hor = ["#4ade80" if (v or 0) >= 0 else "#f87171" for v in hor_dev]
-    c_ver = ["#4ade80" if (v or 0) >= 0 else "#f87171" for v in ver_dev]
-
-    fig_dev.add_trace(
-        go.Bar(x=rings, y=hor_dev, marker_color=c_hor, name="Yatay Sapma",
-               text=[f"{v:.4f}" for v in hor_dev], textposition="outside", textfont_size=10),
-        row=1, col=1,
-    )
-    fig_dev.add_trace(
-        go.Bar(x=rings, y=ver_dev, marker_color=c_ver, name="Dikey Sapma",
-               text=[f"{v:.4f}" for v in ver_dev], textposition="outside", textfont_size=10),
-        row=1, col=2,
-    )
-    for col_i in (1, 2):
-        fig_dev.add_hline(y=0, line_color="#475569", line_width=1, row=1, col=col_i)
-
-    fig_dev.update_layout(height=420, showlegend=False, **PLOTLY_THEME)
+        horizontal_spacing=0.1)
+    from plotly.graph_objects import Bar
+    fig_dev.add_trace(Bar(x=rings, y=hor_dev,
+        marker_color=["#4ade80" if (v or 0)>=0 else "#f87171" for v in hor_dev],
+        name="Yatay"), row=1, col=1)
+    fig_dev.add_trace(Bar(x=rings, y=ver_dev,
+        marker_color=["#4ade80" if (v or 0)>=0 else "#f87171" for v in ver_dev],
+        name="Dikey"), row=1, col=2)
+    fig_dev.add_hline(y=0, line_color="#475569", row=1, col=1)
+    fig_dev.add_hline(y=0, line_color="#475569", row=1, col=2)
+    fig_dev.update_layout(height=380, showlegend=False, **THEME)
     fig_dev.update_xaxes(tickangle=-45)
     st.plotly_chart(fig_dev, use_container_width=True)
 
-
-# ── Tab 3: Çap Analizi ────────────────────────────────────────────────────────
-with tab_dia:
-    diameters = [(d["avg_radius"] or 0) * 2 for d in chart_data]
-
+    # Diameter chart
+    from plotly.graph_objects import Scatter
     fig_dia = go.Figure()
-    fig_dia.add_hline(
-        y=design_dia, line_dash="dash", line_color="#f59e0b", line_width=2,
-        annotation_text=f" Tasarım {design_dia:.3f} m",
-        annotation_font_color="#f59e0b",
-    )
-    fig_dia.add_trace(go.Scatter(
-        x=rings, y=diameters,
-        mode="lines+markers+text",
-        name="Ort. Çap",
-        line=dict(color="#60a5fa", width=2.5),
-        marker=dict(size=7, color="#60a5fa"),
-        text=[f"{v:.4f}" for v in diameters],
-        textposition="top center",
-        textfont=dict(size=10),
-    ))
-    fig_dia.update_layout(
-        height=420,
-        yaxis_title="Çap (m)",
-        xaxis_title="Ring",
-        xaxis_tickangle=-45,
-        **PLOTLY_THEME,
-    )
+    fig_dia.add_hline(y=design_dia, line_dash="dash", line_color="#f59e0b",
+                      annotation_text=f"Tasarım {design_dia:.3f}m",
+                      annotation_font_color="#f59e0b")
+    fig_dia.add_trace(Scatter(x=rings, y=diam, mode="lines+markers+text",
+        line=dict(color="#60a5fa", width=2), marker=dict(size=7),
+        text=[f"{v:.4f}" for v in diam], textposition="top center", textfont_size=9))
+    fig_dia.update_layout(height=360, yaxis_title="Çap (m)",
+                          xaxis_tickangle=-45, **THEME)
     st.plotly_chart(fig_dia, use_container_width=True)
-
-    # Per-ring stats table
-    st.markdown("**Ring başına çap ve sapma özeti**")
-    summary_df = pd.DataFrame({
-        "Ring":         rings,
-        "Chainage (m)": [f"{d['chainage']:.3f}" if d['chainage'] else "—" for d in chart_data],
-        "Ort. Çap (m)": [f"{d['avg_radius']*2:.4f}" if d['avg_radius'] else "—" for d in chart_data],
-        "Tasarım Çapı": [f"{design_dia:.4f}"] * len(chart_data),
-        "Δ Çap (m)":    [f"{d['avg_radius']*2 - design_dia:+.4f}" if d['avg_radius'] else "—" for d in chart_data],
-        "Hor. Sapma":   [f"{d['hor_dev']:+.4f}" if d['hor_dev'] is not None else "—" for d in chart_data],
-        "Ver. Sapma":   [f"{d['ver_dev']:+.4f}" if d['ver_dev'] is not None else "—" for d in chart_data],
-    })
-    st.dataframe(summary_df, use_container_width=True, hide_index=True)
-
-
-# ── Tab 4: Kesit Görünümü ─────────────────────────────────────────────────────
-with tab_cross:
-    ring_labels = [
-        f"{d['ring_no']}  (CH={d['chainage']:.2f}m)" if d['chainage'] else d['ring_no']
-        for d in chart_data
-    ]
-    col_sel, col_info = st.columns([2, 3])
-    with col_sel:
-        sel_idx = st.selectbox("Ring Seç", range(len(chart_data)), format_func=lambda i: ring_labels[i])
-
-    ring = chart_data[sel_idx]
-    avg_r  = ring["avg_radius"]  or 0
-    des_r  = ring["design_radius"] or 0
-
-    with col_info:
-        ci1, ci2, ci3 = st.columns(3)
-        ci1.metric("Best-fit Yarıçap", f"{avg_r:.4f} m")
-        ci2.metric("Tasarım Yarıçapı", f"{des_r:.4f} m")
-        ci3.metric("Δ Yarıçap",        f"{avg_r - des_r:+.4f} m")
-
-    # Generate circle points
-    theta = np.linspace(0, 2 * np.pi, 200)
-
-    fig_cs = go.Figure()
-
-    # Design circle (dashed yellow)
-    fig_cs.add_trace(go.Scatter(
-        x=des_r * np.sin(theta),
-        y=des_r * np.cos(theta),
-        mode="lines",
-        name="Tasarım Dairesi",
-        line=dict(color="#f59e0b", width=1.5, dash="dash"),
-    ))
-
-    # Best-fit circle (blue)
-    fig_cs.add_trace(go.Scatter(
-        x=avg_r * np.sin(theta),
-        y=avg_r * np.cos(theta),
-        mode="lines",
-        name="Best-fit Daire (Kasa)",
-        line=dict(color="#60a5fa", width=2.5),
-    ))
-
-    # Measured points
-    pts = ring["points"]
-    if pts:
-        fig_cs.add_trace(go.Scatter(
-            x=[p["x"] for p in pts],
-            y=[p["y"] for p in pts],
-            mode="markers+text",
-            name="Ölçüm Noktaları",
-            marker=dict(color="#f97316", size=9, line=dict(color="#1e293b", width=1)),
-            text=[p["label"] for p in pts],
-            textposition="top right",
-            textfont=dict(size=10, color="#f97316"),
-            customdata=[[p.get("r"), p.get("rdbc")] for p in pts],
-            hovertemplate=(
-                "<b>%{text}</b><br>"
-                "x: %{x:.4f} m<br>"
-                "y: %{y:.4f} m<br>"
-                "Yarıçap: %{customdata[0]:.4f} m<br>"
-                "RDBC: %{customdata[1]:.4f} m"
-                "<extra></extra>"
-            ),
-        ))
-
-    # Center cross
-    fig_cs.add_trace(go.Scatter(
-        x=[0], y=[0],
-        mode="markers",
-        name="Merkez",
-        marker=dict(symbol="cross-thin", size=14, color="#e2e8f0", line=dict(width=2, color="#e2e8f0")),
-        showlegend=True,
-    ))
-
-    fig_cs.update_layout(
-        height=550,
-        xaxis=dict(title="Yatay (m)", scaleanchor="y", scaleratio=1, zeroline=True, zerolinecolor="#334155"),
-        yaxis=dict(title="Dikey (m)",  zeroline=True, zerolinecolor="#334155"),
-        legend=dict(orientation="h", y=-0.15, x=0.5, xanchor="center"),
-        **PLOTLY_THEME,
-    )
-    st.plotly_chart(fig_cs, use_container_width=True)
-
-    # Per-point deviation table
-    if pts:
-        st.markdown("**Nokta başına yarıçap sapmaları (RDBC)**")
-        rdbc_df = pd.DataFrame([
-            {
-                "Nokta":      p["label"],
-                "Yarıçap (m)": f"{p['r']:.4f}"   if p['r']    is not None else "—",
-                "RDBC (m)":    f"{p['rdbc']:+.4f}" if p['rdbc'] is not None else "—",
-                "x (m)":       f"{p['x']:.4f}",
-                "y (m)":       f"{p['y']:.4f}",
-            }
-            for p in pts
-        ])
-        st.dataframe(rdbc_df, use_container_width=True, hide_index=True, height=280)
