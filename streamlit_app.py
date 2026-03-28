@@ -379,20 +379,56 @@ with tab_table:
         except Exception:
             return ""
 
-    styled = (
-        df_result.style
-        .map(colour_dev, subset=["HOR.DEVIATION (M.)", "VER.DEVIATION (M.)"])
-        .format({
-            "TUN.CL-EASTING (M.)":   "{:.3f}",
-            "TUN.CL-NORTHING (M.)":  "{:.3f}",
-            "TUN.CL-ELEVATION (M.)": "{:.3f}",
-            "CHAINAGE (M.)":         "{:.3f}",
-            "HOR.DEVIATION (M.)":    "{:+.4f}",
-            "VER.DEVIATION (M.)":    "{:+.4f}",
-            "AVG.RADIUS (M.)":       "{:.4f}",
-            "AVG.DIAMETER (M.)":     "{:.4f}",
-        }, na_rep="—")
-    )
+    def colour_dist(val):
+        try:
+            v = float(val)
+            if v > 10:   return "background-color: #7f1d1d; color: white"
+            if v > 2:    return "background-color: #78350f; color: white"
+            return ""
+        except Exception:
+            return ""
+
+    # Build display table: result + MIN_DIST_DTA from backup
+    df_display = df_result.copy()
+    if "MIN_DIST_DTA" in df_backup.columns:
+        df_display["MIN_DIST_DTA (m)"] = df_backup["MIN_DIST_DTA"].values
+        df_display["TUN.CL-E (m)"]     = df_backup["TUN.CL-E"].values
+        df_display["TUN.CL-N (m)"]     = df_backup["TUN.CL-N"].values
+
+    fmt = {
+        "TUN.CL-EASTING (M.)":   "{:.3f}",
+        "TUN.CL-NORTHING (M.)":  "{:.3f}",
+        "TUN.CL-ELEVATION (M.)": "{:.3f}",
+        "CHAINAGE (M.)":         "{:.3f}",
+        "HOR.DEVIATION (M.)":    "{:+.4f}",
+        "VER.DEVIATION (M.)":    "{:+.4f}",
+        "AVG.RADIUS (M.)":       "{:.4f}",
+        "AVG.DIAMETER (M.)":     "{:.4f}",
+    }
+    subset_dev  = ["HOR.DEVIATION (M.)", "VER.DEVIATION (M.)"]
+    subset_dist = ["MIN_DIST_DTA (m)"] if "MIN_DIST_DTA (m)" in df_display.columns else []
+
+    if subset_dist:
+        fmt["MIN_DIST_DTA (m)"] = "{:.3f}"
+        fmt["TUN.CL-E (m)"]     = "{:.3f}"
+        fmt["TUN.CL-N (m)"]     = "{:.3f}"
+
+    styled = df_display.style.map(colour_dev, subset=subset_dev)
+    if subset_dist:
+        styled = styled.map(colour_dist, subset=subset_dist)
+    styled = styled.format(fmt, na_rep="—")
+
+    if subset_dist:
+        max_dist = df_display["MIN_DIST_DTA (m)"].max()
+        if max_dist > 2:
+            st.error(
+                f"**MIN_DIST_DTA** sütunu: ring merkezi ile en yakın DTA noktası arası mesafe. "
+                f"Maksimum `{max_dist:.2f} m` — bu değer büyükse WRS ve DTA koordinatları uyumsuz demektir.\n\n"
+                f"**Beklenen**: < 2 m  |  **Hesaplanan**: {max_dist:.2f} m"
+            )
+        else:
+            st.success(f"DTA koordinat eşleşmesi iyi (maks. dist = {max_dist:.2f} m)")
+
     st.dataframe(styled, use_container_width=True, height=500)
 
 # ─────────────────────────────────────────────────────────────────────────────

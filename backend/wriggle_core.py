@@ -93,7 +93,7 @@ def compute_wriggle_survey(df_WRS_DATA, df_DTA_DATA, DiaDesign=3.396, Direction=
         *[f"R_P{t}" for t in range(1, 17)],
         *[f"RDBC_P{t}" for t in range(1, 17)],
         *[f"ANG_P{t}" for t in range(1, 17)],
-        "E_P", "N_P", "E_Q", "N_Q", "OFFSET", "NUM.PNT"
+        "E_P", "N_P", "E_Q", "N_Q", "OFFSET", "NUM.PNT", "MIN_DIST_DTA"
     ]
     backup_rows = []
 
@@ -197,7 +197,8 @@ def compute_wriggle_survey(df_WRS_DATA, df_DTA_DATA, DiaDesign=3.396, Direction=
             float(np.sqrt((EDTA[d] - Ec)**2 + (NDTA[d] - Nc)**2))
             for d in range(totalDTA + 1)
         ]
-        minIndex = Linear.index(min(Linear))
+        minDist  = min(Linear)
+        minIndex = Linear.index(minDist)
 
         # Guard against edge indices
         minIndex = max(1, min(minIndex, totalDTA - 1))
@@ -261,7 +262,7 @@ def compute_wriggle_survey(df_WRS_DATA, df_DTA_DATA, DiaDesign=3.396, Direction=
         for t in range(16):
             backup.append(float(ANGi[t]) if t < numPnt else None)
 
-        backup += [EP, NP, EQ, NQ, avgOSi, numPnt]
+        backup += [EP, NP, EQ, NQ, avgOSi, numPnt, minDist]
         backup_rows.append(backup)
 
         w += 1
