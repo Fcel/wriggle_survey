@@ -236,6 +236,8 @@ with st.sidebar:
     meta_dept = st.text_input("Department",  value="Survey Section")
     meta_loc  = st.text_input("Location",    value="")
     meta_by   = st.text_input("Computed by", value="")
+    meta_dev  = st.text_input("Developer",   value="")
+    meta_li   = st.text_input("LinkedIn",    value="", placeholder="linkedin.com/in/...")
 
     st.divider()
 
@@ -274,7 +276,8 @@ if compute_btn:
                 "chart_data":   build_chart_data(df_backup),
                 "dia_design":   dia_design,
                 "excel_bytes":  excel_buf.getvalue(),
-                "metadata":     {"department": meta_dept, "location": meta_loc, "computed_by": meta_by},
+                "metadata":     {"department": meta_dept, "location": meta_loc,
+                                 "computed_by": meta_by, "developer": meta_dev, "linkedin": meta_li},
             })
 
         except Exception as exc:

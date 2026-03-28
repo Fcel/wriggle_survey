@@ -74,53 +74,81 @@ def _txt(ax, x, y, s, **kw):
 # ── Section drawing functions ─────────────────────────────────────────────────
 
 def _draw_title_bar(ax, ring_no, chainage, metadata):
-    """Top section: title + ring info + metadata boxes."""
+    """Top section: left = title + ring info, right = 3-row metadata table."""
     _ax_off(ax)
 
-    # Title
-    ax.text(0.5, 0.85, 'WRIGGLE SURVEY REPORT',
+    # ── LEFT HALF: title + ring info (x = 0 … 0.44) ──────────────────────────
+    ax.text(0.22, 0.88, 'WRIGGLE SURVEY REPORT',
             transform=ax.transAxes, ha='center', va='top',
-            fontsize=14, fontweight='bold')
+            fontsize=13, fontweight='bold')
 
-    # Left: Ring No & Chainage
-    ax.text(0.02, 0.50, f'Ring No. :',  transform=ax.transAxes, va='center', fontsize=9, fontweight='bold')
-    ax.text(0.15, 0.50, ring_no,         transform=ax.transAxes, va='center', fontsize=9)
-    ax.text(0.02, 0.18, 'Chainage :',   transform=ax.transAxes, va='center', fontsize=9, fontweight='bold')
-    ax.text(0.15, 0.18, _fmt_ch(chainage), transform=ax.transAxes, va='center', fontsize=9)
+    ax.text(0.01, 0.52, 'Ring No. :', transform=ax.transAxes,
+            va='center', fontsize=9, fontweight='bold')
+    ax.text(0.13, 0.52, ring_no,       transform=ax.transAxes,
+            va='center', fontsize=9)
 
-    # Right: metadata table
-    right_x = 0.38
-    col1_w  = 0.13   # label column width
-    col2_w  = 0.30   # value column width
-    col3_lx = right_x + col1_w + col2_w + 0.01
-    col3_w  = 0.10
-    col4_w  = 0.16
-    row_h   = 0.28
-    rows    = [0.68, 0.35]
+    ax.text(0.01, 0.18, 'Chainage :', transform=ax.transAxes,
+            va='center', fontsize=9, fontweight='bold')
+    ax.text(0.13, 0.18, _fmt_ch(chainage), transform=ax.transAxes,
+            va='center', fontsize=9)
 
-    labels   = ['Department :', 'Location :']
-    values   = [metadata.get('department', ''), metadata.get('location', '')]
-    labels2  = ['Computed by :', 'Calculated Date :']
-    values2  = [metadata.get('computed_by', ''), date.today().strftime('%d/%m/%Y')]
+    # Vertical divider
+    ax.plot([0.44, 0.44], [0.02, 0.98], color='black', lw=0.6,
+            transform=ax.transAxes, clip_on=False)
 
-    for i, (lbl, val, lbl2, val2) in enumerate(zip(labels, values, labels2, values2)):
-        ry = rows[i]
-        # Col1: label
-        _box(ax, right_x, ry - 0.06, col1_w, row_h, fc='white')
-        _txt(ax, right_x + 0.005, ry + 0.08, lbl, fontsize=7.5, fontweight='bold')
-        # Col2: value (colored)
-        fc_val = '#fff2cc' if i == 0 else '#dce6f1'
-        _box(ax, right_x + col1_w, ry - 0.06, col2_w, row_h, fc=fc_val)
-        _txt(ax, right_x + col1_w + 0.01, ry + 0.08, val, fontsize=7.5)
-        # Col3: label2
-        _box(ax, col3_lx, ry - 0.06, col3_w, row_h, fc='white')
-        _txt(ax, col3_lx + 0.005, ry + 0.08, lbl2, fontsize=7)
-        # Col4: value2
-        _box(ax, col3_lx + col3_w, ry - 0.06, col4_w, row_h, fc='#fff2cc')
-        _txt(ax, col3_lx + col3_w + 0.01, ry + 0.08, val2, fontsize=7.5)
+    # ── RIGHT HALF: 3-row metadata table (x = 0.45 … 1.0) ───────────────────
+    rx     = 0.45          # right section start
+    lw1    = 0.14          # label col width
+    vw1    = 0.21          # value col width
+    lw2    = 0.14          # label2 col width
+    vw2    = 0.055         # value2 col width — remainder fills to 1.0
+    vw2    = 1.0 - rx - lw1 - vw1 - lw2  # dynamic fill
 
-    # Horizontal separator under title
-    ax.plot([0, 1], [0.0, 0.0], color='black', lw=0.8, transform=ax.transAxes, clip_on=False)
+    row_h  = 0.295
+    row_ys = [0.66, 0.355, 0.05]   # bottom-y of each row box
+
+    left_labels  = ['Department :',  'Location :',  'Developer :']
+    left_values  = [
+        metadata.get('department', ''),
+        metadata.get('location',   ''),
+        metadata.get('developer',  ''),
+    ]
+    right_labels = ['Computed by :', 'Calculated Date :', 'LinkedIn :']
+    right_values = [
+        metadata.get('computed_by', ''),
+        date.today().strftime('%d/%m/%Y'),
+        metadata.get('linkedin', ''),
+    ]
+    left_fcs  = ['#fff2cc', '#dce6f1', '#e2efda']
+    right_fcs = ['#fff2cc', '#fff2cc', '#dce6f1']
+
+    for i in range(3):
+        ry = row_ys[i]
+
+        # Col A: left label
+        _box(ax, rx, ry, lw1, row_h, fc='white')
+        _txt(ax, rx + 0.005, ry + row_h * 0.5, left_labels[i],
+             fontsize=7, fontweight='bold')
+
+        # Col B: left value
+        _box(ax, rx + lw1, ry, vw1, row_h, fc=left_fcs[i])
+        _txt(ax, rx + lw1 + 0.007, ry + row_h * 0.5, left_values[i],
+             fontsize=7)
+
+        # Col C: right label
+        _box(ax, rx + lw1 + vw1, ry, lw2, row_h, fc='white')
+        _txt(ax, rx + lw1 + vw1 + 0.004, ry + row_h * 0.5, right_labels[i],
+             fontsize=6.5)
+
+        # Col D: right value
+        x4 = rx + lw1 + vw1 + lw2
+        _box(ax, x4, ry, vw2, row_h, fc=right_fcs[i])
+        _txt(ax, x4 + 0.007, ry + row_h * 0.5, right_values[i],
+             fontsize=7)
+
+    # Bottom separator
+    ax.plot([0, 1], [0.0, 0.0], color='black', lw=0.8,
+            transform=ax.transAxes, clip_on=False)
 
 
 def _draw_cross_section(ax, ring_no, points, avg_r, des_r, hor_dev, ver_dev):
