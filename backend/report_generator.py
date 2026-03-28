@@ -74,75 +74,71 @@ def _txt(ax, x, y, s, **kw):
 # ── Section drawing functions ─────────────────────────────────────────────────
 
 def _draw_title_bar(ax, ring_no, chainage, metadata):
-    """Top section: left = title + ring info, right = 3-row metadata table."""
+    """Top section: left=title+ring, centre=metadata, right=developer panel."""
     _ax_off(ax)
 
-    # ── LEFT HALF: title + ring info (x = 0 … 0.44) ──────────────────────────
-    ax.text(0.22, 0.88, 'WRIGGLE SURVEY REPORT',
+    row_h = (1.0 - 0.04) / 3   # 3 equal rows, 0.02 margin top/bottom
+
+    # ── LEFT: title + ring info (x = 0 … 0.43) ───────────────────────────────
+    ax.text(0.215, 0.90, 'WRIGGLE SURVEY REPORT',
             transform=ax.transAxes, ha='center', va='top',
             fontsize=13, fontweight='bold')
-
     ax.text(0.01, 0.52, 'Ring No. :', transform=ax.transAxes,
             va='center', fontsize=9, fontweight='bold')
-    ax.text(0.13, 0.52, ring_no,       transform=ax.transAxes,
-            va='center', fontsize=9)
-
+    ax.text(0.14, 0.52, ring_no, transform=ax.transAxes, va='center', fontsize=9)
     ax.text(0.01, 0.18, 'Chainage :', transform=ax.transAxes,
             va='center', fontsize=9, fontweight='bold')
-    ax.text(0.13, 0.18, _fmt_ch(chainage), transform=ax.transAxes,
+    ax.text(0.14, 0.18, _fmt_ch(chainage), transform=ax.transAxes,
             va='center', fontsize=9)
 
-    # Vertical divider
-    ax.plot([0.44, 0.44], [0.02, 0.98], color='black', lw=0.6,
+    ax.plot([0.43, 0.43], [0.02, 0.98], color='black', lw=0.6,
             transform=ax.transAxes, clip_on=False)
 
-    # ── RIGHT HALF: 3-row metadata table (x = 0.45 … 1.0) ───────────────────
-    # Column widths (all in axes coords, must sum to 1.0 - rx = 0.55)
-    rx   = 0.45
-    lw1  = 0.10   # left label  ("Tunel No :")
-    vw1  = 0.17   # left value
-    lw2  = 0.17   # right label ("Calculated Date :")
-    vw2  = 1.0 - rx - lw1 - vw1 - lw2   # right value — fills remaining width
+    # ── CENTRE: metadata table (x = 0.44 … 0.73) ─────────────────────────────
+    mx  = 0.44
+    mlw = 0.12   # label width
+    mvw = 0.17   # value width  (total centre width = 0.29)
 
-    # 3 equal rows
-    n_rows = 3
-    row_h  = (1.0 - 0.04) / n_rows       # leave 0.02 margin top & bottom
-    row_ys = [1.0 - 0.02 - (i + 1) * row_h for i in range(n_rows)]
-
-    left_labels  = ['Tunel No :', '', '']
-    left_values  = [metadata.get('location', ''), '', '']
-    right_labels = ['Computed by :', 'Calculated Date :', '']
-    right_values = [
-        metadata.get('computed_by', ''),
-        date.today().strftime('%d/%m/%Y'),
-        '',
+    meta_rows = [
+        ('Tunel No :',    metadata.get('location',   ''), '#dce6f1'),
+        ('Comp. by :',    metadata.get('computed_by',''), '#fff2cc'),
+        ('Calc. Date :',  date.today().strftime('%d/%m/%Y'), '#fff2cc'),
     ]
-    left_fcs  = ['#dce6f1', 'white', 'white']
-    right_fcs = ['#fff2cc', '#fff2cc', 'white']
+    for i, (lbl, val, fc) in enumerate(meta_rows):
+        ry = 1.0 - 0.02 - (i + 1) * row_h
+        _box(ax, mx,        ry, mlw, row_h, fc='white')
+        _txt(ax, mx + 0.005, ry + row_h * 0.5, lbl, fontsize=7, fontweight='bold')
+        _box(ax, mx + mlw,  ry, mvw, row_h, fc=fc)
+        _txt(ax, mx + mlw + 0.007, ry + row_h * 0.5, val, fontsize=7)
 
-    for i in range(n_rows):
-        ry = row_ys[i]
+    ax.plot([0.73, 0.73], [0.02, 0.98], color='black', lw=0.6,
+            transform=ax.transAxes, clip_on=False)
 
-        # Col A: left label
-        _box(ax, rx, ry, lw1, row_h, fc='white')
-        _txt(ax, rx + 0.005, ry + row_h * 0.5, left_labels[i],
-             fontsize=7, fontweight='bold')
+    # ── RIGHT: developer panel (x = 0.74 … 0.99) ─────────────────────────────
+    dx  = 0.74
+    dw  = 0.25
+    dev = metadata.get('developer', '')
+    li  = metadata.get('linkedin',  '')
 
-        # Col B: left value
-        _box(ax, rx + lw1, ry, vw1, row_h, fc=left_fcs[i])
-        _txt(ax, rx + lw1 + 0.007, ry + row_h * 0.5, left_values[i],
-             fontsize=7)
+    # Row 0 (top) — "Developer" header
+    ry0 = 1.0 - 0.02 - row_h
+    _box(ax, dx, ry0, dw, row_h, fc='#1F4E79', ec='black', lw=0.8)
+    _txt(ax, dx + dw / 2, ry0 + row_h * 0.5, 'Developer',
+         ha='center', fontsize=8, fontweight='bold', color='white')
 
-        # Col C: right label
-        _box(ax, rx + lw1 + vw1, ry, lw2, row_h, fc='white')
-        _txt(ax, rx + lw1 + vw1 + 0.004, ry + row_h * 0.5, right_labels[i],
-             fontsize=6.5)
+    # Row 1 (middle) — name
+    ry1 = 1.0 - 0.02 - 2 * row_h
+    _box(ax, dx, ry1, dw, row_h, fc='#eef2ff', ec='black', lw=0.6)
+    _txt(ax, dx + dw / 2, ry1 + row_h * 0.5, dev,
+         ha='center', fontsize=8, fontweight='bold')
 
-        # Col D: right value (clipped to page edge)
-        x4 = rx + lw1 + vw1 + lw2
-        _box(ax, x4, ry, vw2, row_h, fc=right_fcs[i])
-        _txt(ax, x4 + 0.007, ry + row_h * 0.5, right_values[i],
-             fontsize=7)
+    # Row 2 (bottom) — LinkedIn
+    ry2 = 0.02
+    _box(ax, dx, ry2, dw, row_h, fc='#e8f4fb', ec='black', lw=0.6)
+    _txt(ax, dx + dw / 2, ry2 + row_h * 0.72, 'LinkedIn',
+         ha='center', fontsize=6.5, fontweight='bold', color='#0077b5')
+    _txt(ax, dx + dw / 2, ry2 + row_h * 0.28, li,
+         ha='center', fontsize=6.5, color='#0077b5')
 
     # Bottom separator
     ax.plot([0, 1], [0.0, 0.0], color='black', lw=0.8,

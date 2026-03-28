@@ -235,6 +235,8 @@ with st.sidebar:
     st.markdown("### 📋 Rapor Bilgileri")
     meta_loc  = st.text_input("Tunel No",    value="")
     meta_by   = st.text_input("Computed by", value="")
+    meta_dev  = st.text_input("Developer",   value="Dr. Fatih Çelik")
+    meta_li   = st.text_input("LinkedIn",    value="", placeholder="linkedin.com/in/...")
 
     st.divider()
 
@@ -273,7 +275,8 @@ if compute_btn:
                 "chart_data":   build_chart_data(df_backup),
                 "dia_design":   dia_design,
                 "excel_bytes":  excel_buf.getvalue(),
-                "metadata":     {"location": meta_loc, "computed_by": meta_by},
+                "metadata":     {"location": meta_loc, "computed_by": meta_by,
+                                 "developer": meta_dev, "linkedin": meta_li},
             })
 
         except Exception as exc:
