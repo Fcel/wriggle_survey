@@ -60,6 +60,18 @@ with st.sidebar:
     )
 
     st.divider()
+    st.markdown("### 📐 Ölçüm Ayarları")
+    points_per_ring = st.number_input(
+        "Ring başına nokta sayısı", value=8, min_value=3, max_value=16, step=1,
+        help="Her ringte kaç prizma noktası ölçüldüğü (örn. 8, 10, 12, 16)"
+    )
+    prism_offset = st.number_input(
+        "Prizma Offset (m)", value=0.038, min_value=0.0,
+        step=0.001, format="%.3f",
+        help="Prizma merkezinden tünel yüzeyine mesafe"
+    )
+
+    st.divider()
     st.markdown("### 🗺️ LandXML Ayarları")
     sample_interval = st.number_input(
         "Örnekleme Aralığı (m)", value=1.0, min_value=0.1,
@@ -81,67 +93,55 @@ st.divider()
 # ═══════════════════════════════════════════════════════════════════════════════
 st.markdown("### 📂 Veri Girişi")
 
-input_mode = st.radio(
-    "Giriş Formatı",
-    ["Tek Excel (birleşik)", "Ayrı Dosyalar"],
-    horizontal=True,
-    help=(
-        "**Tek Excel**: 'Import Wriggle Data' ve 'Import Tunnel Axis (DTA)' "
-        "sayfalarını içeren tek bir dosya.\n\n"
-        "**Ayrı Dosyalar**: Ölçüm verisi Excel + Güzergah Excel veya LandXML."
-    ),
+st.info(
+    "**Wriggle verisi** için sadece 4 sütun yeterli:\n"
+    "`POINT NO.` · `EASTING (M.)` · `NORTHING (M.)` · `ELEVATION (M.)`\n\n"
+    "Ring gruplaması, offset ve NUM. POINTS otomatik hesaplanır.",
+    icon="💡",
 )
 
+col_wrs, col_dta = st.columns(2)
 wrs_bytes = None
 dta_bytes = None
 dta_is_xml = False
 
-if input_mode == "Tek Excel (birleşik)":
-    combined = st.file_uploader(
-        "Birleşik Excel dosyası yükle (.xlsx)",
+with col_wrs:
+    st.markdown("**📍 Wriggle Ölçüm Verisi**")
+    wrs_file = st.file_uploader(
+        "Excel yükle (.xlsx) — ilk sayfa okunur",
         type=["xlsx", "xls"],
-        help="Dosya 2 sayfa içermeli: 'Import Wriggle Data' ve 'Import Tunnel Axis (DTA)'",
+        key="wrs",
+        help="Sütunlar: POINT NO. | EASTING (M.) | NORTHING (M.) | ELEVATION (M.)",
     )
-    if combined:
-        wrs_bytes = combined.getvalue()
-        dta_bytes = combined.getvalue()
+    if wrs_file:
+        wrs_bytes = wrs_file.getvalue()
+        st.caption(f"✅ {wrs_file.name}  ({wrs_file.size/1024:.1f} KB)")
 
-else:
-    col_wrs, col_dta = st.columns(2)
+with col_dta:
+    st.markdown("**🗺️ Tünel Güzergahı (DTA)**")
+    dta_fmt = st.radio(
+        "Format", ["Excel (.xlsx)", "LandXML (.xml)"],
+        horizontal=True, key="dta_fmt",
+    )
+    dta_is_xml = dta_fmt == "LandXML (.xml)"
 
-    with col_wrs:
-        st.markdown("**Wriggle Ölçüm Verisi**")
-        wrs_file = st.file_uploader(
-            "Wriggle Excel yükle (.xlsx)",
+    if dta_is_xml:
+        dta_file = st.file_uploader(
+            "LandXML dosyası yükle",
+            type=["xml", "landxml"],
+            key="dta_xml",
+            help="AutoCAD Civil 3D, Trimble, Leica vb. yazılımların çıktısı",
+        )
+    else:
+        dta_file = st.file_uploader(
+            "DTA Excel yükle (.xlsx)",
             type=["xlsx", "xls"],
-            key="wrs",
+            key="dta_xl",
+            help="Sütunlar: POINT NO. | CHAINAGE | EASTING (M.) | NORTHING (M.) | ELEVATION (M.)",
         )
-        if wrs_file:
-            wrs_bytes = wrs_file.getvalue()
-
-    with col_dta:
-        st.markdown("**Tünel Güzergahı (DTA)**")
-        dta_fmt = st.radio(
-            "Format", ["Excel (.xlsx)", "LandXML (.xml)"],
-            horizontal=True, key="dta_fmt",
-        )
-        dta_is_xml = dta_fmt == "LandXML (.xml)"
-
-        if dta_is_xml:
-            dta_file = st.file_uploader(
-                "LandXML dosyası yükle",
-                type=["xml", "landxml"],
-                key="dta_xml",
-                help="AutoCAD Civil 3D, Trimble, Leica vb. yazılımların çıktısı",
-            )
-        else:
-            dta_file = st.file_uploader(
-                "DTA Excel yükle (.xlsx)",
-                type=["xlsx", "xls"],
-                key="dta_xl",
-            )
-        if dta_file:
-            dta_bytes = dta_file.getvalue()
+    if dta_file:
+        dta_bytes = dta_file.getvalue()
+        st.caption(f"✅ {dta_file.name}  ({dta_file.size/1024:.1f} KB)")
 
 # ── LandXML alignment preview ─────────────────────────────────────────────────
 if dta_is_xml and dta_bytes:
@@ -159,6 +159,38 @@ st.divider()
 # ═══════════════════════════════════════════════════════════════════════════════
 # Helper functions (must be defined before button handler)
 # ═══════════════════════════════════════════════════════════════════════════════
+
+def prepare_wrs_data(df: pd.DataFrame, points_per_ring: int, prism_offset: float) -> pd.DataFrame:
+    """
+    Basit formattan (POINT NO., E, N, Z) tam wriggle formatına dönüştür.
+    Satırları points_per_ring adımlarıyla gruplara böler.
+    """
+    required = {"EASTING (M.)", "NORTHING (M.)", "ELEVATION (M.)"}
+    missing = required - set(df.columns)
+    if missing:
+        raise ValueError(f"Eksik sütunlar: {missing}")
+
+    df = df.reset_index(drop=True)
+    total = len(df)
+    rows = []
+
+    for i, src in df.iterrows():
+        pos = i % points_per_ring          # 0-indexed position within ring
+        ring_no = i // points_per_ring     # ring index
+        is_first = pos == 0
+        pts_this_ring = min(points_per_ring, total - ring_no * points_per_ring)
+
+        rows.append({
+            "RING NO.":       ring_no,
+            "POINT NO.":      pos + 1,
+            "EASTING (M.)":   src["EASTING (M.)"],
+            "NORTHING (M.)":  src["NORTHING (M.)"],
+            "ELEVATION (M.)": src["ELEVATION (M.)"],
+            "OFFSET (M.)":    prism_offset,
+            "NUM. POINTS":    pts_this_ring if is_first else None,
+        })
+
+    return pd.DataFrame(rows)
 def _safe(v):
     try:
         f = float(v)
@@ -210,15 +242,27 @@ compute_btn = st.button("▶ Hesapla", type="primary", disabled=not can_compute,
 if compute_btn:
     with st.spinner("Hesaplanıyor..."):
         try:
-            # Read Wriggle data
-            df_wrs = pd.read_excel(io.BytesIO(wrs_bytes), sheet_name="Import Wriggle Data")
+            # ── Wriggle verisi oku (ilk sayfa, herhangi bir isim) ─────────────
+            df_wrs_raw = pd.read_excel(io.BytesIO(wrs_bytes), sheet_name=0)
 
-            # Read DTA data
+            # Tam format mı (NUM. POINTS var) yoksa basit format mı?
+            if "NUM. POINTS" in df_wrs_raw.columns:
+                df_wrs = df_wrs_raw   # eski tam format — doğrudan kullan
+            else:
+                df_wrs = prepare_wrs_data(df_wrs_raw, int(points_per_ring), float(prism_offset))
+                st.info(
+                    f"Basit format algılandı → "
+                    f"{len(df_wrs_raw)} nokta, "
+                    f"{len(df_wrs_raw) // int(points_per_ring)} ring "
+                    f"({int(points_per_ring)} nokta/ring, offset={prism_offset:.3f} m)"
+                )
+
+            # ── DTA verisi oku ────────────────────────────────────────────────
             if dta_is_xml:
                 df_dta = parse_landxml_to_dta(dta_bytes, sample_interval)
                 st.success(f"LandXML → {len(df_dta)} güzergah noktası okundu.")
             else:
-                df_dta = pd.read_excel(io.BytesIO(dta_bytes), sheet_name="Import Tunnel Axis (DTA)")
+                df_dta = pd.read_excel(io.BytesIO(dta_bytes), sheet_name=0)
 
             # Compute
             df_result, df_backup = compute_wriggle_survey(df_wrs, df_dta, dia_design, direction)
