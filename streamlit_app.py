@@ -155,6 +155,54 @@ if dta_is_xml and dta_bytes:
 
 st.divider()
 
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Helper functions (must be defined before button handler)
+# ═══════════════════════════════════════════════════════════════════════════════
+def _safe(v):
+    try:
+        f = float(v)
+        return None if math.isnan(f) else f
+    except (TypeError, ValueError):
+        return None
+
+
+def _build_chart_data(df_backup: pd.DataFrame) -> list[dict]:
+    rows = []
+    for _, row in df_backup.iterrows():
+        num_pnt = int(row.get("NUM.PNT", 0) or 0)
+        xc = _safe(row.get("X_C"))
+        yc_raw = _safe(row.get("Y_C"))
+        yc = (yc_raw - 100) if yc_raw is not None else None
+
+        points = []
+        for t in range(1, num_pnt + 1):
+            xv = _safe(row.get(f"X_P{t}"))
+            yv_raw = _safe(row.get(f"Y_P{t}"))
+            yv = (yv_raw - 100) if yv_raw is not None else None
+            rdbc = _safe(row.get(f"RDBC_P{t}"))
+            r    = _safe(row.get(f"R_P{t}"))
+            if xv is not None and yv is not None and xc is not None and yc is not None:
+                points.append({
+                    "label": f"P{t}",
+                    "x": round(xv - xc, 6),
+                    "y": round(yv - yc, 6),
+                    "rdbc": rdbc,
+                    "r": r,
+                })
+
+        rows.append({
+            "ring_no":       str(row.get("RING NO.", "")),
+            "chainage":      _safe(row.get("CH")),
+            "avg_radius":    _safe(row.get("AVG.R")),
+            "design_radius": _safe(row.get("DESING.CL-R")),
+            "hor_dev":       _safe(row.get("DH")),
+            "ver_dev":       _safe(row.get("DV")),
+            "points":        points,
+        })
+    return rows
+
+
 # ── Compute button ────────────────────────────────────────────────────────────
 can_compute = wrs_bytes is not None and dta_bytes is not None
 compute_btn = st.button("▶ Hesapla", type="primary", disabled=not can_compute, use_container_width=False)
@@ -195,53 +243,6 @@ if compute_btn:
 
         except Exception as exc:
             st.error(f"**Hata:** {exc}")
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Helper — build chart data from backup DataFrame
-# ═══════════════════════════════════════════════════════════════════════════════
-def _safe(v):
-    try:
-        f = float(v)
-        return None if math.isnan(f) else f
-    except (TypeError, ValueError):
-        return None
-
-
-def _build_chart_data(df_backup: pd.DataFrame) -> list[dict]:
-    rows = []
-    for _, row in df_backup.iterrows():
-        num_pnt = int(row.get("NUM.PNT", 0) or 0)
-        xc = _safe(row.get("X_C"))
-        yc_raw = _safe(row.get("Y_C"))
-        yc = (yc_raw - 100) if yc_raw is not None else None
-
-        points = []
-        for t in range(1, num_pnt + 1):
-            xv = _safe(row.get(f"X_P{t}"))
-            yv_raw = _safe(row.get(f"Y_P{t}"))
-            yv = (yv_raw - 100) if yv_raw is not None else None
-            rdbc = _safe(row.get(f"RDBC_P{t}"))
-            r    = _safe(row.get(f"R_P{t}"))
-            if xv is not None and yv is not None and xc is not None and yc is not None:
-                points.append({
-                    "label": f"P{t}",
-                    "x": round(xv - xc, 6),
-                    "y": round(yv - yc, 6),
-                    "rdbc": rdbc,
-                    "r": r,
-                })
-
-        rows.append({
-            "ring_no":      str(row.get("RING NO.", "")),
-            "chainage":     _safe(row.get("CH")),
-            "avg_radius":   _safe(row.get("AVG.R")),
-            "design_radius": _safe(row.get("DESING.CL-R")),
-            "hor_dev":      _safe(row.get("DH")),
-            "ver_dev":      _safe(row.get("DV")),
-            "points":       points,
-        })
-    return rows
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
