@@ -330,7 +330,7 @@ with tab_table:
 
     styled = (
         df_result.style
-        .applymap(colour_dev, subset=["HOR.DEVIATION (M.)", "VER.DEVIATION (M.)"])
+        .map(colour_dev, subset=["HOR.DEVIATION (M.)", "VER.DEVIATION (M.)"])
         .format({
             "TUN.CL-EASTING (M.)":   "{:.3f}",
             "TUN.CL-NORTHING (M.)":  "{:.3f}",

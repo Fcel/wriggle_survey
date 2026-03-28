@@ -137,8 +137,8 @@ def _draw_cross_section(ax, ring_no, points, avg_r, des_r, hor_dev, ver_dev):
     ax.grid(True, linestyle='--', linewidth=0.4, alpha=0.4, color='gray')
 
     # Axis cross-hair
-    ax.axhline(0, color='gray', lw=0.5, zorder=1)
-    ax.axvline(0, color='gray', lw=0.5, zorder=1)
+    ax.plot([-lim, lim], [0, 0], color='gray', lw=0.5, zorder=1)
+    ax.plot([0, 0], [-lim, lim], color='gray', lw=0.5, zorder=1)
 
     # ── Design circle (centered at origin = design axis) ─────────────────────
     design_patch = mpatches.Circle(
