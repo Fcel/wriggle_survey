@@ -104,25 +104,20 @@ def _draw_title_bar(ax, ring_no, chainage, metadata):
     vw2    = 0.055         # value2 col width — remainder fills to 1.0
     vw2    = 1.0 - rx - lw1 - vw1 - lw2  # dynamic fill
 
-    row_h  = 0.295
-    row_ys = [0.66, 0.355, 0.05]   # bottom-y of each row box
+    row_h  = 0.44
+    row_ys = [0.52, 0.06]   # bottom-y of each row box
 
-    left_labels  = ['Department :',  'Location :',  'Developer :']
-    left_values  = [
-        metadata.get('department', ''),
-        metadata.get('location',   ''),
-        metadata.get('developer',  ''),
-    ]
-    right_labels = ['Computed by :', 'Calculated Date :', 'LinkedIn :']
+    left_labels  = ['Tunel No :',    '']
+    left_values  = [metadata.get('location', ''), '']
+    right_labels = ['Computed by :', 'Calculated Date :']
     right_values = [
         metadata.get('computed_by', ''),
         date.today().strftime('%d/%m/%Y'),
-        metadata.get('linkedin', ''),
     ]
-    left_fcs  = ['#fff2cc', '#dce6f1', '#e2efda']
-    right_fcs = ['#fff2cc', '#fff2cc', '#dce6f1']
+    left_fcs  = ['#dce6f1', 'white']
+    right_fcs = ['#fff2cc', '#fff2cc']
 
-    for i in range(3):
+    for i in range(2):
         ry = row_ys[i]
 
         # Col A: left label
