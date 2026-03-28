@@ -97,27 +97,30 @@ def _draw_title_bar(ax, ring_no, chainage, metadata):
             transform=ax.transAxes, clip_on=False)
 
     # ── RIGHT HALF: 3-row metadata table (x = 0.45 … 1.0) ───────────────────
-    rx     = 0.45          # right section start
-    lw1    = 0.14          # label col width
-    vw1    = 0.21          # value col width
-    lw2    = 0.14          # label2 col width
-    vw2    = 0.055         # value2 col width — remainder fills to 1.0
-    vw2    = 1.0 - rx - lw1 - vw1 - lw2  # dynamic fill
+    # Column widths (all in axes coords, must sum to 1.0 - rx = 0.55)
+    rx   = 0.45
+    lw1  = 0.10   # left label  ("Tunel No :")
+    vw1  = 0.17   # left value
+    lw2  = 0.17   # right label ("Calculated Date :")
+    vw2  = 1.0 - rx - lw1 - vw1 - lw2   # right value — fills remaining width
 
-    row_h  = 0.44
-    row_ys = [0.52, 0.06]   # bottom-y of each row box
+    # 3 equal rows
+    n_rows = 3
+    row_h  = (1.0 - 0.04) / n_rows       # leave 0.02 margin top & bottom
+    row_ys = [1.0 - 0.02 - (i + 1) * row_h for i in range(n_rows)]
 
-    left_labels  = ['Tunel No :',    '']
-    left_values  = [metadata.get('location', ''), '']
-    right_labels = ['Computed by :', 'Calculated Date :']
+    left_labels  = ['Tunel No :', '', '']
+    left_values  = [metadata.get('location', ''), '', '']
+    right_labels = ['Computed by :', 'Calculated Date :', '']
     right_values = [
         metadata.get('computed_by', ''),
         date.today().strftime('%d/%m/%Y'),
+        '',
     ]
-    left_fcs  = ['#dce6f1', 'white']
-    right_fcs = ['#fff2cc', '#fff2cc']
+    left_fcs  = ['#dce6f1', 'white', 'white']
+    right_fcs = ['#fff2cc', '#fff2cc', 'white']
 
-    for i in range(2):
+    for i in range(n_rows):
         ry = row_ys[i]
 
         # Col A: left label
@@ -135,7 +138,7 @@ def _draw_title_bar(ax, ring_no, chainage, metadata):
         _txt(ax, rx + lw1 + vw1 + 0.004, ry + row_h * 0.5, right_labels[i],
              fontsize=6.5)
 
-        # Col D: right value
+        # Col D: right value (clipped to page edge)
         x4 = rx + lw1 + vw1 + lw2
         _box(ax, x4, ry, vw2, row_h, fc=right_fcs[i])
         _txt(ax, x4 + 0.007, ry + row_h * 0.5, right_values[i],
