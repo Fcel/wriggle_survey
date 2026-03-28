@@ -145,11 +145,16 @@ with st.sidebar:
     if dta_is_xml:
         sample_interval = st.number_input(
             "Örnekleme Aralığı (m)", value=1.0, min_value=0.1, step=0.5, format="%.1f")
+        swap_en = st.checkbox(
+            "E/N sırasını ters çevir",
+            value=False,
+            help="LandXML Start/Center koordinatları 'Easting Northing' sırasındaysa işaretle")
         dta_file = st.file_uploader(
             "LandXML yükle", type=["xml","landxml"], key="dta_xml",
             help="AutoCAD Civil 3D, Trimble, Leica vb.")
     else:
         sample_interval = 1.0
+        swap_en = False
         dta_file = st.file_uploader(
             "DTA Excel yükle (.xlsx)", type=["xlsx","xls"], key="dta_xl",
             help="Sütunlar: POINT NO. | CHAINAGE | EASTING | NORTHING | ELEVATION")
@@ -161,6 +166,39 @@ with st.sidebar:
         if names:
             st.info(f"Güzergah: **{names[0]}**" +
                     (f" (+{len(names)-1} diğer)" if len(names) > 1 else ""))
+
+    # ── Koordinat Tanılama ────────────────────────────────────────────────────
+    if wrs_bytes and dta_bytes:
+        with st.expander("🔍 Koordinat Tanılama", expanded=False):
+            try:
+                _df_wrs_p = pd.read_excel(io.BytesIO(wrs_bytes), sheet_name=0)
+                if "EASTING (M.)" not in _df_wrs_p.columns:
+                    _df_wrs_p = prepare_wrs_data(_df_wrs_p, int(points_per_ring), float(prism_offset))
+                st.caption("**Wriggle Verisi (E/N aralığı):**")
+                st.write(f"E: `{_df_wrs_p['EASTING (M.)'].min():.3f}` → `{_df_wrs_p['EASTING (M.)'].max():.3f}`")
+                st.write(f"N: `{_df_wrs_p['NORTHING (M.)'].min():.3f}` → `{_df_wrs_p['NORTHING (M.)'].max():.3f}`")
+            except Exception as _e:
+                st.warning(f"WRS parse hatası: {_e}")
+            try:
+                if dta_is_xml:
+                    _df_dta_p = parse_landxml_to_dta(dta_bytes, float(sample_interval), swap_en=swap_en)
+                else:
+                    _df_dta_p = pd.read_excel(io.BytesIO(dta_bytes), sheet_name=0)
+                st.caption("**DTA / Güzergah (E/N / Chainage aralığı):**")
+                st.write(f"E: `{_df_dta_p['EASTING (M.)'].min():.3f}` → `{_df_dta_p['EASTING (M.)'].max():.3f}`")
+                st.write(f"N: `{_df_dta_p['NORTHING (M.)'].min():.3f}` → `{_df_dta_p['NORTHING (M.)'].max():.3f}`")
+                st.write(f"Chainage: `{_df_dta_p['CHAINAGE'].min():.3f}` → `{_df_dta_p['CHAINAGE'].max():.3f}`")
+                # Check overlap
+                wrs_e_ok = (_df_wrs_p['EASTING (M.)'].min()  < _df_dta_p['EASTING (M.)'].max() and
+                            _df_wrs_p['EASTING (M.)'].max()  > _df_dta_p['EASTING (M.)'].min())
+                wrs_n_ok = (_df_wrs_p['NORTHING (M.)'].min() < _df_dta_p['NORTHING (M.)'].max() and
+                            _df_wrs_p['NORTHING (M.)'].max() > _df_dta_p['NORTHING (M.)'].min())
+                if wrs_e_ok and wrs_n_ok:
+                    st.success("✅ E/N aralıkları örtüşüyor")
+                else:
+                    st.error("❌ E/N aralıkları örtüşmüyor — koordinat sistemi uyumsuz olabilir!")
+            except Exception as _e:
+                st.warning(f"DTA parse hatası: {_e}")
 
     st.divider()
 
@@ -190,7 +228,7 @@ if compute_btn:
                 df_wrs = prepare_wrs_data(df_wrs_raw, int(points_per_ring), float(prism_offset))
 
             if dta_is_xml:
-                df_dta = parse_landxml_to_dta(dta_bytes, float(sample_interval))
+                df_dta = parse_landxml_to_dta(dta_bytes, float(sample_interval), swap_en=swap_en)
             else:
                 df_dta = pd.read_excel(io.BytesIO(dta_bytes), sheet_name=0)
 
@@ -247,6 +285,19 @@ with top_right:
         file_name="Export_Wriggle_Survey.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         use_container_width=True,
+    )
+
+# ── Koordinat uyumsuzluğu uyarısı ─────────────────────────────────────────────
+if len(dh_vals) and np.max(np.abs(dh_vals)) > 2.0:
+    st.warning(
+        f"⚠️ **Koordinat uyumsuzluğu?** "
+        f"Maks. yatay sapma `{np.max(np.abs(dh_vals)):.3f} m` — bu tünel için çok büyük.\n\n"
+        "Sol paneldeki **🔍 Koordinat Tanılama** bölümünü açarak WRS ve DTA koordinat "
+        "aralıklarının örtüşüp örtüşmediğini kontrol edin.\n\n"
+        "**Olası nedenler:**\n"
+        "- LandXML dosyasında E/N sırası ters (Easting önce, Northing sonra)\n"
+        "- WRS ve DTA farklı koordinat sisteminde (UTM zone farkı vb.)\n"
+        "- DTA staStart değeri yanlış"
     )
 
 st.divider()

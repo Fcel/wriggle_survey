@@ -24,13 +24,17 @@ def _strip_ns(tag):
     """Remove namespace from a tag."""
     return tag.split('}')[-1] if '}' in tag else tag
 
-def _parse_pair(text):
+def _parse_pair(text, swap=False):
     """
     Parse 'N E' or 'N E Z' coordinate text.
-    LandXML CoordGeom uses Northing Easting order.
-    Returns list of floats.
+    LandXML CoordGeom normally uses Northing Easting order.
+    If swap=True, treat first value as Easting (for files exported in E N order).
+    Returns [N, E] floats.
     """
-    return [float(v) for v in text.strip().split()]
+    vals = [float(v) for v in text.strip().split()]
+    if swap and len(vals) >= 2:
+        vals[0], vals[1] = vals[1], vals[0]
+    return vals
 
 
 # ─── Vertical profile ─────────────────────────────────────────────────────────
@@ -88,10 +92,11 @@ def _elev_at_station(pvs, sta):
 
 # ─── Horizontal geometry ──────────────────────────────────────────────────────
 
-def _parse_coord_geom(alignment_elem, ns):
+def _parse_coord_geom(alignment_elem, ns, swap=False):
     """
     Parse <CoordGeom> and return a list of geometry segment dicts.
     Supported types: Line, Curve  (Spiral elements are skipped).
+    swap=True reverses the N/E coordinate order in Start/Center text.
     """
     segments = []
     sta_acc = 0.0
@@ -110,8 +115,8 @@ def _parse_coord_geom(alignment_elem, ns):
             start_e = child.find(_t(ns, 'Start'))
             n0 = e0 = None
             if start_e is not None and start_e.text:
-                coords = _parse_pair(start_e.text)
-                n0, e0 = coords[0], coords[1]  # LandXML: N E order
+                coords = _parse_pair(start_e.text, swap=swap)
+                n0, e0 = coords[0], coords[1]  # LandXML: N E order (or swapped)
 
             segments.append({
                 'type': 'line',
@@ -133,10 +138,10 @@ def _parse_coord_geom(alignment_elem, ns):
             n0 = e0 = nc = ec = None
 
             if start_e is not None and start_e.text:
-                coords = _parse_pair(start_e.text)
+                coords = _parse_pair(start_e.text, swap=swap)
                 n0, e0 = coords[0], coords[1]
             if center_e is not None and center_e.text:
-                coords = _parse_pair(center_e.text)
+                coords = _parse_pair(center_e.text, swap=swap)
                 nc, ec = coords[0], coords[1]
 
             segments.append({
@@ -227,7 +232,7 @@ def _try_cgpoints(root, ns):
 
 # ─── Public API ───────────────────────────────────────────────────────────────
 
-def parse_landxml_to_dta(content_bytes: bytes, sample_interval: float = 1.0) -> pd.DataFrame:
+def parse_landxml_to_dta(content_bytes: bytes, sample_interval: float = 1.0, swap_en: bool = False) -> pd.DataFrame:
     """
     Parse a LandXML file and return a tunnel axis DataFrame compatible
     with compute_wriggle_survey().
@@ -266,7 +271,7 @@ def parse_landxml_to_dta(content_bytes: bytes, sample_interval: float = 1.0) -> 
         length  = float(alignment.get('length', 0) or 0)
         sta_start = float(alignment.get('staStart', 0) or 0)
 
-        segments = _parse_coord_geom(alignment, ns)
+        segments = _parse_coord_geom(alignment, ns, swap=swap_en)
         pvs      = _parse_profile(alignment, ns)
 
         if segments and length > 0:
