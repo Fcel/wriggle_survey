@@ -320,7 +320,7 @@ if "df_result" not in st.session_state:
               border-bottom:1px solid rgba(255,255,255,0.2); padding-bottom:16px;">
     Dr. Fatih Çelik
   </div>
-  <a href="https://www.linkedin.com/in/fatihcelik/" target="_blank" style="
+  <a href="https://www.linkedin.com/in/fcelikkk/" target="_blank" style="
       display:inline-block;
       background:#0077b5;
       color:white;
