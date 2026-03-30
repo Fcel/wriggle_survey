@@ -4,19 +4,26 @@ PyInstaller spec — Wriggle Survey
 Build command:  pyinstaller WriggleSurvey.spec
 """
 import sys
-from PyInstaller.utils.hooks import collect_data_files, collect_all
+from PyInstaller.utils.hooks import collect_data_files, collect_all, copy_metadata
 
 block_cipher = None
 
 # Collect all package data
 datas = []
+# copy_metadata fixes "No package metadata was found for X" errors
+datas += copy_metadata("streamlit")
+datas += copy_metadata("pandas")
+datas += copy_metadata("numpy")
+datas += copy_metadata("plotly")
+datas += copy_metadata("matplotlib")
+datas += copy_metadata("openpyxl")
+
 datas += collect_data_files("streamlit",  include_py_files=True)
 datas += collect_data_files("plotly")
 datas += collect_data_files("matplotlib")
 datas += collect_data_files("pandas")
 datas += collect_data_files("openpyxl")
 datas += collect_data_files("altair")
-datas += collect_data_files("pyarrow")
 
 # App source files
 datas += [
