@@ -68,13 +68,13 @@ def main():
         os.chdir(sys._MEIPASS)
 
     import streamlit.web.cli as stcli
-    sys.argv = [
-        "streamlit", "run", "streamlit_app.py",
-        "--server.headless=true",
-        "--server.port=8501",
-        "--browser.gatherUsageStats=false",
-        "--server.fileWatcherType=none",
-    ]
+    os.environ["STREAMLIT_SERVER_HEADLESS"]        = "true"
+    os.environ["STREAMLIT_SERVER_PORT"]            = "8501"
+    os.environ["STREAMLIT_SERVER_FILE_WATCHER_TYPE"] = "none"
+    os.environ["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
+    os.environ["STREAMLIT_GLOBAL_DEVELOPMENT_MODE"]    = "false"
+
+    sys.argv = ["streamlit", "run", "streamlit_app.py"]
     sys.exit(stcli.main())
 
 
