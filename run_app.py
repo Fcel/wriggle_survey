@@ -44,7 +44,20 @@ def _patch_metadata():
     _meta.version = _safe_version
 
 
-def _write_streamlit_config():
+def _free_port(preferred=8501):
+    """Return preferred port if free, otherwise find a free one."""
+    import socket
+    for port in range(preferred, preferred + 50):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind(("127.0.0.1", port))
+                return port
+            except OSError:
+                continue
+    return preferred
+
+
+def _write_streamlit_config(port):
     """Write ~/.streamlit/config.toml to force developmentMode=false."""
     from pathlib import Path
     config_dir = Path.home() / ".streamlit"
@@ -54,16 +67,16 @@ def _write_streamlit_config():
         "developmentMode = false\n\n"
         "[server]\n"
         "headless = true\n"
-        "port = 8501\n"
+        f"port = {port}\n"
         'fileWatcherType = "none"\n\n'
         "[browser]\n"
         "gatherUsageStats = false\n"
     )
 
 
-def _open_browser():
+def _open_browser(port=8501):
     time.sleep(4)
-    webbrowser.open("http://localhost:8501")
+    webbrowser.open(f"http://localhost:{port}")
 
 
 def main():
@@ -71,7 +84,8 @@ def main():
     _patch_metadata()
 
     # Write config.toml before Streamlit reads it
-    _write_streamlit_config()
+    port = _free_port(8501)
+    _write_streamlit_config(port)
 
     # ── License check ─────────────────────────────────────────────────────────
     from license_manager import is_activated
@@ -82,7 +96,7 @@ def main():
             sys.exit(0)
 
     # ── Start Streamlit ───────────────────────────────────────────────────────
-    threading.Thread(target=_open_browser, daemon=True).start()
+    threading.Thread(target=lambda: _open_browser(port), daemon=True).start()
 
     if getattr(sys, "frozen", False):
         os.chdir(sys._MEIPASS)
