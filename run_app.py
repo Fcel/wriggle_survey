@@ -93,4 +93,13 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        import traceback
+        from pathlib import Path
+        log = Path.home() / "WriggleSurvey_error.log"
+        log.write_text(traceback.format_exc())
+        print(f"HATA: {e}")
+        print(f"Detay: {log}")
+        input("Çıkmak için Enter'a basın...")

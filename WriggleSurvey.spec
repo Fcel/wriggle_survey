@@ -80,7 +80,7 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=False,            # False = pencere açılmaz (sadece browser)
+    console=True,             # True = hata mesajları görünür
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
