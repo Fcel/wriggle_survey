@@ -44,14 +44,34 @@ def _patch_metadata():
     _meta.version = _safe_version
 
 
+def _write_streamlit_config():
+    """Write ~/.streamlit/config.toml to force developmentMode=false."""
+    from pathlib import Path
+    config_dir = Path.home() / ".streamlit"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    (config_dir / "config.toml").write_text(
+        "[global]\n"
+        "developmentMode = false\n\n"
+        "[server]\n"
+        "headless = true\n"
+        "port = 8501\n"
+        'fileWatcherType = "none"\n\n'
+        "[browser]\n"
+        "gatherUsageStats = false\n"
+    )
+
+
 def _open_browser():
-    time.sleep(3)
+    time.sleep(4)
     webbrowser.open("http://localhost:8501")
 
 
 def main():
     # Must patch BEFORE any streamlit import
     _patch_metadata()
+
+    # Write config.toml before Streamlit reads it
+    _write_streamlit_config()
 
     # ── License check ─────────────────────────────────────────────────────────
     from license_manager import is_activated
@@ -68,12 +88,6 @@ def main():
         os.chdir(sys._MEIPASS)
 
     import streamlit.web.cli as stcli
-    os.environ["STREAMLIT_SERVER_HEADLESS"]        = "true"
-    os.environ["STREAMLIT_SERVER_PORT"]            = "8501"
-    os.environ["STREAMLIT_SERVER_FILE_WATCHER_TYPE"] = "none"
-    os.environ["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
-    os.environ["STREAMLIT_GLOBAL_DEVELOPMENT_MODE"]    = "false"
-
     sys.argv = ["streamlit", "run", "streamlit_app.py"]
     sys.exit(stcli.main())
 
